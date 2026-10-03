@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emoura Phạm - Miss Grand International 2026</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            background: #030508;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            font-family: 'Montserrat', 'Segoe UI', Arial, sans-serif;
+            position: relative;
+        }
+
+        /* Canvas làm nền thiên hà */
+        #galaxyCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Container chứa chữ rơi */
+        #fallingContainer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* Kiểu dáng từng chữ/icon rơi */
+        .falling-item {
+            position: absolute;
+            color: #ffffff;
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 
+                         0 0 20px rgba(255, 255, 255, 0.4);
+            will-change: transform, opacity;
+        }
+
+        /* SVG Cờ Việt Nam - Chuẩn bo góc, ngôi sao nhỏ vừa vặn ở trung tâm */
+        .vn-flag-svg {
+            width: 28px;
+            height: 19px;
+            display: inline-block;
+            vertical-align: middle;
+            border-radius: 3px;
+            box-shadow: 0 0 6px rgba(218, 37, 29, 0.8);
+            flex-shrink: 0;
+        }
+
+        /* Nút Bánh Răng */
+        .settings-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            color: #ffffff;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 10;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s ease;
+        }
+
+        .settings-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: rotate(45deg) scale(1.05);
+        }
+
+        /* Bảng điều khiển cài đặt */
+        .settings-panel {
+            position: fixed;
+            bottom: 75px;
+            right: 20px;
+            background: rgba(15, 20, 30, 0.88);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            padding: 16px;
+            width: 250px;
+            color: #ffffff;
+            z-index: 10;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            animation: fadeIn 0.3s ease forwards;
+        }
+
+        .settings-panel.active {
+            display: flex;
+        }
+
+        .settings-panel h4 {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: rgba(255, 255, 255, 0.8);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 6px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .control-group label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.75);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .control-group input[type="range"] {
+            width: 100%;
+            accent-color: #ffffff;
+            cursor: pointer;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Canvas làm nền thiên hà -->
+    <canvas id="galaxyCanvas"></canvas>
+
+    <!-- Container chứa chữ rơi -->
+    <div id="fallingContainer"></div>
+
+    <!-- Nút Bánh Răng -->
+    <button class="settings-btn" id="settingsBtn" title="Tùy chỉnh">⚙️</button>
+
+    <!-- Bảng Điều Khiển Cấu Hình -->
+    <div class="settings-panel" id="settingsPanel">
+        <h4>Cấu Hình Hiệu Ứng</h4>
+        
+        <div class="control-group">
+            <label>Kích thước chữ <span id="sizeVal">18px</span></label>
+            <input type="range" id="sizeSlider" min="12" max="36" step="1" value="18">
+        </div>
+
+        <div class="control-group">
+            <label>Tốc độ rơi <span id="speedVal">1.0x</span></label>
+            <input type="range" id="speedSlider" min="0.3" max="3" step="0.1" value="1.0">
+        </div>
+
+        <div class="control-group">
+            <label>Mật độ chữ <span id="densityVal">Vừa</span></label>
+            <input type="range" id="densitySlider" min="15" max="60" step="5" value="30">
+        </div>
+    </div>
+
+    <script>
+        // 1. NỀN THIÊN HÀ HẠT SÁNG LẤP LÁNH
+        const canvas = document.getElementById('galaxyCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let stars = [];
+        const numStars = 120;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            initStars();
+        }
+
+        function initStars() {
+            stars = [];
+            for (let i = 0; i < numStars; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    radius: Math.random() * 1.5 + 0.5,
+                    alpha: Math.random(),
+                    speed: Math.random() * 0.02 + 0.005
+                });
+            }
+        }
+
+        function drawStars() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            let gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#030508');
+            gradient.addColorStop(0.5, '#080e18');
+            gradient.addColorStop(1, '#020305');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            for (let star of stars) {
+                star.alpha += star.speed;
+                if (star.alpha > 1 || star.alpha < 0) {
+                    star.speed = -star.speed;
+                }
+
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 255, 255, ${Math.abs(star.alpha)})`;
+                ctx.shadowBlur = star.radius * 4;
+                ctx.shadowColor = '#ffffff';
+                ctx.fill();
+            }
+
+            requestAnimationFrame(drawStars);
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        drawStars();
+
+        // 2. MÃ SVG CỜ VIỆT NAM CHUẨN (Ngôi sao thu nhỏ nằm giữa, xung quanh viền đỏ rộng rãi)
+        const vnFlagHTML = `<svg class="vn-flag-svg" viewBox="0 0 100 66.6" xmlns="http://www.w3.org/2000/svg">
+            <rect width="100" height="66.6" rx="4" fill="#DA251D"/>
+            <!-- Ngôi sao được tính toán bán kính nhỏ vừa vặn đặt chính xác tại tâm (50, 33.3) -->
+            <polygon points="50,18.3 53.7,29.6 65.6,29.6 56,36.6 59.7,47.9 50,40.9 40.3,47.9 44,36.6 34.4,29.6 46.3,29.6" fill="#FFFF00"/>
+        </svg>`;
+
+        // Dữ liệu chữ rơi
+        const itemsData = [
+            "Emoura Phạm 👑",
+            `${vnFlagHTML}`,
+            `👑 Miss Grand International 2026 👑`,
+            "Vote free ngại gì không vote",
+            `Việt Nam ${vnFlagHTML}`,
+            "👑",
+            `${vnFlagHTML} một lần nữa Việt Nam ơi 👑`
+    
+        ];
+
+        const container = document.getElementById('fallingContainer');
+        
+        let baseFontSize = 18;
+        let speedMultiplier = 1.0;
+        let maxItems = 30;
+        let activeItems = [];
+
+        class FallingItem {
+            constructor() {
+                this.element = document.createElement('div');
+                this.element.className = 'falling-item';
+                this.reset(true);
+                container.appendChild(this.element);
+            }
+
+            reset(initial = false) {
+                this.htmlContent = itemsData[Math.floor(Math.random() * itemsData.length)];
+                this.element.innerHTML = this.htmlContent;
+
+                this.x = Math.random() * (window.innerWidth - 240);
+                this.y = initial ? Math.random() * -window.innerHeight : -60;
+                
+                this.sizeFactor = (Math.random() * 0.4 + 0.8); 
+                this.baseSpeed = (Math.random() * 0.8 + 0.4);
+                this.swayAmplitude = Math.random() * 1.5 + 0.5;
+                this.swaySpeed = Math.random() * 0.02 + 0.01;
+                this.swayOffset = Math.random() * Math.PI * 2;
+                this.opacity = Math.random() * 0.5 + 0.5;
+
+                this.updateStyle();
+            }
+
+            updateStyle() {
+                const currentSize = Math.round(baseFontSize * this.sizeFactor);
+                this.element.style.fontSize = `${currentSize}px`;
+                this.element.style.opacity = this.opacity;
+
+                const flagElement = this.element.querySelector('.vn-flag-svg');
+                if (flagElement) {
+                    flagElement.style.width = `${Math.round(currentSize * 1.4)}px`;
+                    flagElement.style.height = `${Math.round(currentSize * 0.93)}px`;
+                }
+            }
+
+            update() {
+                this.y += this.baseSpeed * speedMultiplier * (baseFontSize / 18);
+                this.swayOffset += this.swaySpeed;
+                const currentX = this.x + Math.sin(this.swayOffset) * (this.swayAmplitude * 20);
+
+                this.element.style.transform = `translate3d(${currentX}px, ${this.y}px, 0)`;
+
+                if (this.y > window.innerHeight + 60) {
+                    this.reset();
+                }
+            }
+
+            destroy() {
+                if (this.element.parentNode) {
+                    this.element.parentNode.removeChild(this.element);
+                }
+            }
+        }
+
+        function updateItemCount() {
+            while (activeItems.length < maxItems) {
+                activeItems.push(new FallingItem());
+            }
+            while (activeItems.length > maxItems) {
+                let item = activeItems.pop();
+                item.destroy();
+            }
+        }
+
+        function animate() {
+            for (let item of activeItems) {
+                item.update();
+            }
+            requestAnimationFrame(animate);
+        }
+
+        updateItemCount();
+        animate();
+
+        // 3. BẢNG CÀI ĐẶT
+        const settingsBtn = document.getElementById('settingsBtn');
+        const settingsPanel = document.getElementById('settingsPanel');
+        
+        const sizeSlider = document.getElementById('sizeSlider');
+        const sizeVal = document.getElementById('sizeVal');
+        
+        const speedSlider = document.getElementById('speedSlider');
+        const speedVal = document.getElementById('speedVal');
+        
+        const densitySlider = document.getElementById('densitySlider');
+        const densityVal = document.getElementById('densityVal');
+
+        settingsBtn.addEventListener('click', () => {
+            settingsPanel.classList.toggle('active');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!settingsPanel.contains(e.target) && !settingsBtn.contains(e.target)) {
+                settingsPanel.classList.remove('active');
+            }
+        });
+
+        sizeSlider.addEventListener('input', (e) => {
+            baseFontSize = parseInt(e.target.value);
+            sizeVal.textContent = `${baseFontSize}px`;
+            for (let item of activeItems) {
+                item.updateStyle();
+            }
+        });
+
+        speedSlider.addEventListener('input', (e) => {
+            speedMultiplier = parseFloat(e.target.value);
+            speedVal.textContent = `${speedMultiplier.toFixed(1)}x`;
+        });
+
+        densitySlider.addEventListener('input', (e) => {
+            maxItems = parseInt(e.target.value);
+            if (maxItems < 25) densityVal.textContent = "Thưa";
+            else if (maxItems < 45) densityVal.textContent = "Vừa";
+            else densityVal.textContent = "Dày";
+            
+            updateItemCount();
+        });
+    </script>
+</body>
+</html>
